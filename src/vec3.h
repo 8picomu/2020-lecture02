@@ -1,6 +1,8 @@
 #ifndef _CLASS_VEC3_
 #define _CLASS_VEC3_
 
+#include<iostream>
+
 template <typename T>
 class vec3
 {
@@ -10,6 +12,8 @@ protected:
     T z;
 
 public:
+    vec3() { x = y = z = 0; }
+
     vec3(T _x, T _y, T _z)
     {
         x = _x;
@@ -29,7 +33,7 @@ public:
         return z;
     }
 
-    vec3 operator * (T target) const {
+    vec3 operator * (const T target) const {
         return vec3(x * target, y * target, z * target);
     }
 
@@ -45,13 +49,19 @@ public:
         return vec3(x - target.x, y - target.y, z - target.z);
     }
 
-    T dot(vec3 target) const {
+    T dot(const vec3 target) const {
         return ((x * target.x) +
                 (y * target.y) +
                 (z * target.z));
     }
 
-    vec3 cross(vec3 target) const {
+    T me_dot() const {
+        return ((x * x) +
+                (y * y) +
+                (z * z));
+    }
+
+    vec3 cross(vec3& target) const {
         return vec3(y * target.z - z * target.y,
                     z * target.x - x * target.z,
                     x * target.y - y * target.x
@@ -59,21 +69,27 @@ public:
     }
 
     double magnitude() const {
-        return std::sqrt(dot(this));
+        return std::sqrt(me_dot());
     }
 
-    T sqr_magnitude() {
-        return dot(this);
+    T sqr_magnitude() const {
+        return me_dot();
     }
 
-    vec3 normalized() const {
-        return (1 / sqrMagnitude) * this;
+    vec3 normalized() {
+        return *this * (T)(1 / magnitude());
     }
 
-    bool eqValue(vec3 target) const {
+    bool eqValue(vec3& target) const {
         return (x == target.x) &&
                (y == target.y) && 
                (z == target.z);
+    }
+
+    void display() const {
+        std::cout << "x:" << x << std::endl;
+        std::cout << "y:" << y << std::endl;
+        std::cout << "z:" << z << std::endl;
     }
 
     ~vec3() {
