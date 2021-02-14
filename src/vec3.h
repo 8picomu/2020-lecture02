@@ -92,16 +92,16 @@ public:
         std::cout << "z:" << z << std::endl;
     }
 
-    vec3 reflect(const vec3& normal) const {
-        return this *  -1.0f + 2(this->dot(normal)) * normal;
+    vec3 reflect(vec3& normal) const {
+        return this->operator*(-1.0f) + normal * 2 * (this->dot(normal));
     }
 
-    vec3 refract(const vec3& normal, const float ior1, const float ior2, vec3& t) const {
-        const vec3 th = (this - this->dot(normal)) * normal * -(ior1 / ior2);
-        const auto th_magnitude = th.sqr_magnitude;
+    bool refract(vec3& normal, float ior1, float ior2, vec3& t) const {
+        vec3 th = (this->operator-(normal * this->dot(normal))) * -(ior1 / ior2);
+        const auto th_magnitude = th.sqr_magnitude();
         if (th_magnitude > 1.0) return false;
 
-        t = (-std::sqrt(1 - th.sqr_magnitude())) * normal + th;
+        t = normal * (-std::sqrt(1 - th_magnitude)) + th;
 
         return true;
     }

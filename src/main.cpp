@@ -140,6 +140,88 @@ void spheres_test() {
   img.write_ppm("output.ppm");
 }
 
+const int MAX_DEPTH = 100;
+vec3f LIGHT_DIRECTION = vec3f(0.5f, 1.0f, 0.5f).normalized();
+
+vec3f raytrace(ray& camera_ray, scene& scene, const int depth = 0) {
+
+  if(MAX_DEPTH < depth) return vec3f(0, 0, 0);
+
+  intersect_info info;
+  if(scene.collisions_detect(camera_ray, info)) {
+
+    //std::cout << "in main" << std::endl;
+    //display(info);
+
+    if(info.sph->material == sphere_material::mirror) {
+      return raytrace(ray(info.point, (camera_ray.get_direction() * -1.0f).reflect(info.normal).normalized()), scene, depth + 1);
+    } else if (info.sph->material == sphere_material::glass) {
+      auto is_inside = (camera_ray.get_direction() * -1.0f).dot(info.normal) < 0.0;
+
+      vec3f direction(0, 0, 0);
+      if(!is_inside) {
+        if((camera_ray.get_direction() * -1.0f).refract(info.normal, 1.0f, 1.5f, direction)){
+          return raytrace(ray(info.point, direction.normalized()), scene, depth + 1);
+        }
+
+        return vec3f(0, 0, 0);
+      } else {
+        if((camera_ray.get_direction() * -1.0f).refract(info.normal * -1.0f, 1.5f, 1.0f, direction)){
+          return raytrace(ray(info.point, direction.normalized()), scene, depth + 1);
+        }
+
+        return vec3f(0, 0, 0);
+      }
+    } else if(info.sph->material == sphere_material::diffuse) {
+      auto light_ray = ray(info.point, LIGHT_DIRECTION);
+      
+      intersect_info light_info;
+      if(scene.collisions_detect(light_ray, light_info)) {
+        return info.sph->rgb * std::max(LIGHT_DIRECTION.dot(info.normal), 0.0f) + info.sph->rgb * 0.1f;
+      } else {
+        return info.sph->rgb * 0.1f;
+      }
+    }
+  }
+
+  return vec3f(0, 0, 0);
+}
+
+void raytrace_test() {
+  image img(512, 512);
+  auto canvas_size = img.get_size();
+
+  auto width = std::get<0>(canvas_size);
+  auto height = std::get<1>(canvas_size);
+
+  vec3f camPos(4, 1, 7);
+  vec3f lookAt(0, 0, 0);
+  pinhole_camera camera(camPos, (lookAt - camPos).normalized());
+
+  scene scene;
+  scene.add_sphere(sphere(vec3f(0, -1001, 0), 1000.0, sphere_material::diffuse, vec3f(0, 0, 0)));
+  scene.add_sphere(sphere(vec3f(-2, 0, 1), 1.0, sphere_material::diffuse, vec3f(0, 0.2, 0.2)));
+  scene.add_sphere(sphere(vec3f(0, 0, 0), 1.0, sphere_material::diffuse, vec3f(0.2, 0, 0.2)));
+  scene.add_sphere(sphere(vec3f(2, 0, -1), 1.0, sphere_material::diffuse, vec3f(0.2, 0.2, 0)));
+  scene.add_sphere(sphere(vec3f(-2, 3, 1), 1.0, sphere_material::mirror, vec3f(1, 1, 1)));
+  scene.add_sphere(sphere(vec3f(3, 1, 2), 1.0, sphere_material::glass, vec3f(1, 1, 1)));
+
+  for(int j = 0; j < height; ++j) {
+    for(int i = 0; i < width; ++i) {
+      auto u = (2.0f * i - width) / height;
+      auto v = (2.0f * j - height) / height;
+
+      auto ray = camera.pinhole_ray(u, v);
+
+      img.set_pixel(i, j, raytrace(ray, scene));
+    }
+  }
+
+  img.gamma_set();
+
+  img.write_ppm("output.ppm");
+}
+
 void tests() {
   assert_eq(vec3_and_scalar_multi_test());
   assert_eq(vec3_hadamard_test());
@@ -151,6 +233,7 @@ void tests() {
 
 int main() {
   
-  spheres_test();
+  raytrace_test();
+
   return 0;
 }
