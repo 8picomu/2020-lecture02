@@ -92,6 +92,15 @@ public:
         std::cout << "z:" << z << std::endl;
     }
 
+    vec3 reflect(const vec3& normal) const {
+        return this *  -1.0f + 2(this->dot(normal)) * normal;
+    }
+
+    vec3 refract(const vec3& normal, const float ior1, const float ior2) const {
+        vec3 th = (this - this->dot(normal)) * normal * -(ior1 / ior2);
+        return (-std::sqrt(1 - th.sqr_magnitude())) * normal + th;
+    }
+
     ~vec3() {
 
     }
