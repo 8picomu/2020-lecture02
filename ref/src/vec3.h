@@ -19,6 +19,34 @@ struct Vec3 {
   T& operator[](unsigned int i) { return v[i]; }
 
   Vec3 operator-() const { return Vec3(-v[0], -v[1], -v[2]); }
+
+  Vec3& operator+=(const Vec3& v) {
+    this->v[0] += v[0];
+    this->v[1] += v[1];
+    this->v[2] += v[2];
+    return *this;
+  }
+
+  Vec3& operator-=(const Vec3& v) {
+    this->v[0] -= v[0];
+    this->v[1] -= v[1];
+    this->v[2] -= v[2];
+    return *this;
+  }
+
+  Vec3& operator*=(const Vec3& v) {
+    this->v[0] *= v[0];
+    this->v[1] *= v[1];
+    this->v[2] *= v[2];
+    return *this;
+  }
+
+  Vec3& operator/=(const Vec3& v) {
+    this->v[0] /= v[0];
+    this->v[1] /= v[1];
+    this->v[2] /= v[2];
+    return *this;
+  }
 };
 
 // ベクトル同士の加算
@@ -140,7 +168,7 @@ inline Vec3<T> cross(const Vec3<T>& v1, const Vec3<T>& v2) {
 
 // print
 template <typename T>
-std::ostream& operator<<(std::ostream& stream, const Vec3<T>& v) {
+inline std::ostream& operator<<(std::ostream& stream, const Vec3<T>& v) {
   stream << "(" << v[0] << ", " << v[1] << ", " << v[2] << ")";
   return stream;
 }
@@ -148,5 +176,24 @@ std::ostream& operator<<(std::ostream& stream, const Vec3<T>& v) {
 using Vec3u = Vec3<unsigned int>;
 using Vec3i = Vec3<int>;
 using Vec3f = Vec3<float>;
+
+// 反射ベクトルの計算
+inline Vec3f reflect(const Vec3f& v, const Vec3f& n) {
+  return -v + 2.0f * dot(v, n) * n;
+}
+
+// 屈折ベクトルの計算
+inline bool refract(const Vec3f& v, const Vec3f& n, float ior1, float ior2,
+                    Vec3f& r) {
+  const Vec3f t_h = -ior1 / ior2 * (v - dot(v, n) * n);
+
+  // 全反射
+  if (length2(t_h) > 1.0) return false;
+
+  const Vec3f t_p = -std::sqrt(std::max(1.0f - length2(t_h), 0.0f)) * n;
+  r = t_h + t_p;
+
+  return true;
+}
 
 #endif

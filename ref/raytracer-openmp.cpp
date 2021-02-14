@@ -1,7 +1,10 @@
+#include <omp.h>
+
 #include <cmath>
 
 #include "image.h"
 #include "pinhole-camera.h"
+#include "rng.h"
 #include "scene.h"
 
 // 光源の方向
@@ -72,6 +75,7 @@ Vec3f raytrace(const Ray& ray_in, const Scene& scene) {
 int main() {
   constexpr int width = 512;
   constexpr int height = 512;
+  constexpr int SSAA_samples = 16;
   Image img(width, height);
 
   const Vec3f camPos(4, 1, 7);
@@ -91,17 +95,30 @@ int main() {
   scene.addSphere(Sphere(Vec3f(-2, 3, 1), 1.0, Vec3f(1), MaterialType::Mirror));
   scene.addSphere(Sphere(Vec3f(3, 1, 2), 1.0, Vec3f(1), MaterialType::Glass));
 
+#pragma omp parallel for schedule(dynamic, 1)
   for (int j = 0; j < height; ++j) {
     for (int i = 0; i < width; ++i) {
-      // (u, v)の計算
-      float u = (2.0f * i - width) / height;
-      float v = (2.0f * j - height) / height;
+      // NOTE: 並列化のために画素ごとに乱数生成器を用意する
+      RNG rng(i + width * j);
 
-      // レイの生成
-      const Ray ray = camera.sampleRay(u, v);
+      Vec3f color(0);
+      for (int k = 0; k < SSAA_samples; ++k) {
+        // (u, v)の計算
+        float u = (2.0f * (i + rng.getNext()) - width) / height;
+        float v = (2.0f * (j + rng.getNext()) - height) / height;
 
-      // 古典的レイトレーシングで色を計算
-      img.setPixel(i, j, raytrace(ray, scene));
+        // レイの生成
+        const Ray ray = camera.sampleRay(u, v);
+
+        // 古典的レイトレーシングで色を計算
+        color += raytrace(ray, scene);
+      }
+
+      // 平均
+      color /= Vec3f(SSAA_samples);
+
+      // 画素への書き込み
+      img.setPixel(i, j, color);
     }
   }
 
