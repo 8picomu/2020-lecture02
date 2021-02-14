@@ -96,9 +96,14 @@ public:
         return this *  -1.0f + 2(this->dot(normal)) * normal;
     }
 
-    vec3 refract(const vec3& normal, const float ior1, const float ior2) const {
-        vec3 th = (this - this->dot(normal)) * normal * -(ior1 / ior2);
-        return (-std::sqrt(1 - th.sqr_magnitude())) * normal + th;
+    vec3 refract(const vec3& normal, const float ior1, const float ior2, vec3& t) const {
+        const vec3 th = (this - this->dot(normal)) * normal * -(ior1 / ior2);
+        const auto th_magnitude = th.sqr_magnitude;
+        if (th_magnitude > 1.0) return false;
+
+        t = (-std::sqrt(1 - th.sqr_magnitude())) * normal + th;
+
+        return true;
     }
 
     ~vec3() {
