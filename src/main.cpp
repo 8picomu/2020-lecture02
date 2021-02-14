@@ -176,7 +176,7 @@ vec3f raytrace(ray& camera_ray, scene& scene, const int depth = 0) {
       auto light_ray = ray(info.point, LIGHT_DIRECTION);
       
       intersect_info light_info;
-      if(scene.collisions_detect(light_ray, light_info)) {
+      if(!scene.collisions_detect(light_ray, light_info)) {
         return info.sph->rgb * std::max(LIGHT_DIRECTION.dot(info.normal), 0.0f) + info.sph->rgb * 0.1f;
       } else {
         return info.sph->rgb * 0.1f;
@@ -199,10 +199,10 @@ void raytrace_test() {
   pinhole_camera camera(camPos, (lookAt - camPos).normalized());
 
   scene scene;
-  scene.add_sphere(sphere(vec3f(0, -1001, 0), 1000.0, sphere_material::diffuse, vec3f(0, 0, 0)));
-  scene.add_sphere(sphere(vec3f(-2, 0, 1), 1.0, sphere_material::diffuse, vec3f(0, 0.2, 0.2)));
-  scene.add_sphere(sphere(vec3f(0, 0, 0), 1.0, sphere_material::diffuse, vec3f(0.2, 0, 0.2)));
-  scene.add_sphere(sphere(vec3f(2, 0, -1), 1.0, sphere_material::diffuse, vec3f(0.2, 0.2, 0)));
+  scene.add_sphere(sphere(vec3f(0, -1001, 0), 1000.0, sphere_material::diffuse, vec3f(0.9, 0.9, 0.9)));
+  scene.add_sphere(sphere(vec3f(-2, 0, 1), 1.0, sphere_material::diffuse, vec3f(0.8, 0.2, 0.2)));
+  scene.add_sphere(sphere(vec3f(0, 0, 0), 1.0, sphere_material::diffuse, vec3f(0.2, 0.8, 0.2)));
+  scene.add_sphere(sphere(vec3f(2, 0, -1), 1.0, sphere_material::diffuse, vec3f(0.2, 0.2, 0.8)));
   scene.add_sphere(sphere(vec3f(-2, 3, 1), 1.0, sphere_material::mirror, vec3f(1, 1, 1)));
   scene.add_sphere(sphere(vec3f(3, 1, 2), 1.0, sphere_material::glass, vec3f(1, 1, 1)));
 
