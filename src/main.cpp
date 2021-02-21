@@ -189,6 +189,95 @@ vec3f raytrace(ray& camera_ray, scene& scene, const int depth = 0) {
   return vec3f(0, 0, 0);
 }
 
+const int AO_SAMPLE = 100;
+const float DISTANCE = 10.0f;
+const float Pi = 3.14159265359f;
+
+void makeBasis(vec3f v1, vec3f& v2, vec3f& v3) {
+  if(v1.get_y() < 0.9f) {
+    v2 = v1.cross(vec3f(0, 1, 0)).normalized();
+  } else {
+    v2 = v1.cross(vec3f(0, 0, -1)).normalized();
+  }
+
+  v3 = v2.cross(v1).normalized();
+}
+
+vec3f make_ao_sampling_ray_direction(float u, float v) {
+  const auto theta = std::acos(std::max(1.0f - u, 0.0f));
+  const auto phi = 2.0f * Pi * v;
+  return vec3f(std::cos(phi) * std::sin(theta), 1.0f - u, std::sin(phi) * std::sin(theta));
+}
+
+vec3f local_to_warld(vec3f direction, vec3f x, vec3f y, vec3f z) {
+  return vec3f(direction.get_x() * x.get_x() + direction.get_y() * y.get_x() + direction.get_z() * z.get_x(),
+               direction.get_x() * x.get_y() + direction.get_y() * y.get_y() + direction.get_z() * z.get_y(),
+               direction.get_x() * x.get_z() + direction.get_y() * y.get_z() + direction.get_z() * z.get_z());
+}
+
+float rtao(intersect_info& info, scene& scene, rng& rng) {
+  int count = 0;
+
+  vec3f v2, v3;
+  makeBasis(info.normal, v2, v3);
+
+  for(int i = 0; i < AO_SAMPLE; ++i) {
+
+    const auto direction = make_ao_sampling_ray_direction(rng.makeValue(), rng.makeValue());
+    const auto ao_ray = ray(info.point, local_to_warld(direction, v2, info.normal, v3));
+
+    intersect_info into_info;
+    if(scene.collisions_detect(ao_ray, into_info) && into_info.distance < DISTANCE) {
+      count++;
+    }
+  }
+
+  return static_cast<float>(count) / AO_SAMPLE;
+}
+
+vec3f raytrace_of_ao(ray& camera_ray, scene& scene, const int depth = 0) {
+  if(MAX_DEPTH < depth) return vec3f(0, 0, 0);
+
+  intersect_info info;
+  if(scene.collisions_detect(camera_ray, info)) {
+
+    //std::cout << "in main" << std::endl;
+    //display(info);
+
+    if(info.sph->material == sphere_material::mirror) {
+      return raytrace(ray(info.point, (camera_ray.get_direction() * -1.0f).reflect(info.normal).normalized()), scene, depth + 1);
+    } else if (info.sph->material == sphere_material::glass) {
+      auto is_inside = (camera_ray.get_direction() * -1.0f).dot(info.normal) < 0.0;
+
+      vec3f direction(0, 0, 0);
+      if(!is_inside) {
+        if((camera_ray.get_direction() * -1.0f).refract(info.normal, 1.0f, 1.5f, direction)){
+          return raytrace(ray(info.point, direction.normalized()), scene, depth + 1);
+        }
+
+        return vec3f(0, 0, 0);
+      } else {
+        if((camera_ray.get_direction() * -1.0f).refract(info.normal * -1.0f, 1.5f, 1.0f, direction)){
+          return raytrace(ray(info.point, direction.normalized()), scene, depth + 1);
+        }
+
+        return vec3f(0, 0, 0);
+      }
+    } else if(info.sph->material == sphere_material::diffuse) {
+      auto light_ray = ray(info.point, LIGHT_DIRECTION);
+      
+      intersect_info light_info;
+      if(!scene.collisions_detect(light_ray, light_info)) {
+        return info.sph->rgb * std::max(LIGHT_DIRECTION.dot(info.normal), 0.0f) + info.sph->rgb * 0.1f;
+      } else {
+        return info.sph->rgb * 0.1f;
+      }
+    }
+  }
+  
+  return vec3f(0, 0, 0);
+}
+
 void raytrace_test() {
   image img(512, 512);
   auto canvas_size = img.get_size();
@@ -277,6 +366,101 @@ void raytrace_test_with_rng(int sample_point) {
   img.write_ppm("output.ppm");
 }
 
+void ao_test(int sample_point) {
+  image img(512, 512);
+  auto canvas_size = img.get_size();
+
+  auto width = std::get<0>(canvas_size);
+  auto height = std::get<1>(canvas_size);
+
+  vec3f camPos(4, 1, 7);
+  vec3f lookAt(0, 0, 0);
+  pinhole_camera camera(camPos, (lookAt - camPos).normalized());
+
+  scene scene;
+  scene.add_sphere(sphere(vec3f(0, -1001, 0), 1000.0, sphere_material::diffuse, vec3f(0.9, 0.9, 0.9)));
+  scene.add_sphere(sphere(vec3f(-2, 0, 1), 1.0, sphere_material::diffuse, vec3f(0.8, 0.2, 0.2)));
+  scene.add_sphere(sphere(vec3f(0, 0, 0), 1.0, sphere_material::diffuse, vec3f(0.2, 0.8, 0.2)));
+  scene.add_sphere(sphere(vec3f(2, 0, -1), 1.0, sphere_material::diffuse, vec3f(0.2, 0.2, 0.8)));
+  scene.add_sphere(sphere(vec3f(-2, 3, 1), 1.0, sphere_material::mirror, vec3f(1, 1, 1)));
+  scene.add_sphere(sphere(vec3f(3, 1, 2), 1.0, sphere_material::glass, vec3f(1, 1, 1)));
+
+#pragma omp parallel for schedule(dynamic, 1)
+  for(int j = 0; j < height; ++j) {
+    for(int i = 0; i < width; ++i) {
+      vec3f color(0.0f, 0.0f, 0.0f);
+      rng rng(i + width * j);
+      
+      for (int k = 0; k < sample_point; ++k)
+      {
+
+        auto u = (2.0f * (i + rng.makeValue()) - width) / height;
+        auto v = (2.0f * (j + rng.makeValue()) - height) / height;
+
+        auto ray = camera.pinhole_ray(u, v);
+        intersect_info info;
+        if(scene.collisions_detect(ray, info)) {
+          auto rtao_value = 1.0f - rtao(info, scene, rng);
+          color = color + vec3f(rtao_value, rtao_value, rtao_value);
+        }
+      }
+
+      color = vec3f(color.get_x() / sample_point, color.get_y() / sample_point, color.get_z() / sample_point);
+      
+      img.set_pixel(i, j, color);
+    }
+  }
+
+  img.gamma_set();
+
+  img.write_ppm("output.ppm");
+}
+
+void raytrace_of_ao_test(int sample_point) {
+  thread_local rng rng(1);
+  image img(512, 512);
+  auto canvas_size = img.get_size();
+
+  auto width = std::get<0>(canvas_size);
+  auto height = std::get<1>(canvas_size);
+
+  vec3f camPos(4, 1, 7);
+  vec3f lookAt(0, 0, 0);
+  pinhole_camera camera(camPos, (lookAt - camPos).normalized());
+
+  scene scene;
+  scene.add_sphere(sphere(vec3f(0, -1001, 0), 1000.0, sphere_material::diffuse, vec3f(0.9, 0.9, 0.9)));
+  scene.add_sphere(sphere(vec3f(-2, 0, 1), 1.0, sphere_material::diffuse, vec3f(0.8, 0.2, 0.2)));
+  scene.add_sphere(sphere(vec3f(0, 0, 0), 1.0, sphere_material::diffuse, vec3f(0.2, 0.8, 0.2)));
+  scene.add_sphere(sphere(vec3f(2, 0, -1), 1.0, sphere_material::diffuse, vec3f(0.2, 0.2, 0.8)));
+  scene.add_sphere(sphere(vec3f(-2, 3, 1), 1.0, sphere_material::mirror, vec3f(1, 1, 1)));
+  scene.add_sphere(sphere(vec3f(3, 1, 2), 1.0, sphere_material::glass, vec3f(1, 1, 1)));
+
+#pragma omp parallel for schedule(dynamic, 1)
+  for(int j = 0; j < height; ++j) {
+    for(int i = 0; i < width; ++i) {
+
+      vec3f color;
+      for (int k = 0; k < sample_point; ++k)
+      {
+        auto u = (2.0f * (i + rng.makeValue()) - width) / height;
+        auto v = (2.0f * (j + rng.makeValue()) - height) / height;
+
+        auto ray = camera.pinhole_ray(u, v);
+        color = color + raytrace(ray, scene);
+      }
+
+      color = vec3f(color.get_x() / sample_point, color.get_y() / sample_point, color.get_z() / sample_point);
+      
+      img.set_pixel(i, j, color);
+    }
+  }
+
+  img.gamma_set();
+
+  img.write_ppm("output.ppm");
+}
+
 void tests() {
   assert_eq(vec3_and_scalar_multi_test());
   assert_eq(vec3_hadamard_test());
@@ -288,7 +472,7 @@ void tests() {
 
 int main() {
   
-  raytrace_test_with_rng(100);
+  ao_test(4);
 
   return 0;
 }

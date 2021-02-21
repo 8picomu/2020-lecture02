@@ -53,11 +53,4 @@ public:
     ~sphere() {}
 };
 
-void display(intersect_info& info) {
-    std::cout << info.distance << std::endl;
-    std::cout << info.point.get_x() << " " << info.point.get_y() << " " << info.point.get_z() << std::endl;
-    std::cout << info.normal.get_x() << " " << info.normal.get_y() << " " << info.normal.get_z() << std::endl;
-    std::cout << info.sph->radius << std::endl;
-}
-
 #endif // _CLASS_SPHERE_
