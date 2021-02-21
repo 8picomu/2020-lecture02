@@ -1,4 +1,5 @@
 #include <iostream>
+#include <omp.h>
 #include "./image.h"
 #include "./vec3.h"
 #include "./pinhole_camera.h"
@@ -231,6 +232,51 @@ void rng_test() {
   }
 }
 
+void raytrace_test_with_rng(int sample_point) {
+  thread_local rng rng(1);
+  image img(512, 512);
+  auto canvas_size = img.get_size();
+
+  auto width = std::get<0>(canvas_size);
+  auto height = std::get<1>(canvas_size);
+
+  vec3f camPos(4, 1, 7);
+  vec3f lookAt(0, 0, 0);
+  pinhole_camera camera(camPos, (lookAt - camPos).normalized());
+
+  scene scene;
+  scene.add_sphere(sphere(vec3f(0, -1001, 0), 1000.0, sphere_material::diffuse, vec3f(0.9, 0.9, 0.9)));
+  scene.add_sphere(sphere(vec3f(-2, 0, 1), 1.0, sphere_material::diffuse, vec3f(0.8, 0.2, 0.2)));
+  scene.add_sphere(sphere(vec3f(0, 0, 0), 1.0, sphere_material::diffuse, vec3f(0.2, 0.8, 0.2)));
+  scene.add_sphere(sphere(vec3f(2, 0, -1), 1.0, sphere_material::diffuse, vec3f(0.2, 0.2, 0.8)));
+  scene.add_sphere(sphere(vec3f(-2, 3, 1), 1.0, sphere_material::mirror, vec3f(1, 1, 1)));
+  scene.add_sphere(sphere(vec3f(3, 1, 2), 1.0, sphere_material::glass, vec3f(1, 1, 1)));
+
+#pragma omp parallel for schedule(dynamic, 1)
+  for(int j = 0; j < height; ++j) {
+    for(int i = 0; i < width; ++i) {
+
+      vec3f color;
+      for (int k = 0; k < sample_point; ++k)
+      {
+        auto u = (2.0f * (i + rng.makeValue()) - width) / height;
+        auto v = (2.0f * (j + rng.makeValue()) - height) / height;
+
+        auto ray = camera.pinhole_ray(u, v);
+        color = color + raytrace(ray, scene);
+      }
+
+      color = vec3f(color.get_x() / sample_point, color.get_y() / sample_point, color.get_z() / sample_point);
+      
+      img.set_pixel(i, j, color);
+    }
+  }
+
+  img.gamma_set();
+
+  img.write_ppm("output.ppm");
+}
+
 void tests() {
   assert_eq(vec3_and_scalar_multi_test());
   assert_eq(vec3_hadamard_test());
@@ -242,7 +288,7 @@ void tests() {
 
 int main() {
   
-  rng_test();
+  raytrace_test_with_rng(100);
 
   return 0;
 }
