@@ -5,6 +5,7 @@
 #include "./sphere.h"
 #include "./intersect_info.h"
 #include "./scene.h"
+#include "./rng.h"
 
 void assert_eq(bool eq) {
   if(eq) {
@@ -222,6 +223,14 @@ void raytrace_test() {
   img.write_ppm("output.ppm");
 }
 
+void rng_test() {
+  rng rng(1);
+
+  for(int i = 0; i < 100; ++i) {
+    std::cout << rng.makeValue() << std::endl;
+  }
+}
+
 void tests() {
   assert_eq(vec3_and_scalar_multi_test());
   assert_eq(vec3_hadamard_test());
@@ -233,7 +242,7 @@ void tests() {
 
 int main() {
   
-  raytrace_test();
+  rng_test();
 
   return 0;
 }
