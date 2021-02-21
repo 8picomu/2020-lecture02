@@ -235,7 +235,7 @@ float rtao(intersect_info& info, scene& scene, rng& rng) {
   return static_cast<float>(count) / AO_SAMPLE;
 }
 
-vec3f raytrace_of_ao(ray& camera_ray, scene& scene, const int depth = 0) {
+vec3f raytrace_with_ao(ray& camera_ray, scene& scene, rng& rng, const int depth = 0) {
   if(MAX_DEPTH < depth) return vec3f(0, 0, 0);
 
   intersect_info info;
@@ -267,10 +267,13 @@ vec3f raytrace_of_ao(ray& camera_ray, scene& scene, const int depth = 0) {
       auto light_ray = ray(info.point, LIGHT_DIRECTION);
       
       intersect_info light_info;
+
+      auto kdao = info.sph->rgb * 0.1f * (1.0f - rtao(info, scene, rng));
+
       if(!scene.collisions_detect(light_ray, light_info)) {
-        return info.sph->rgb * std::max(LIGHT_DIRECTION.dot(info.normal), 0.0f) + info.sph->rgb * 0.1f;
+        return info.sph->rgb * std::max(LIGHT_DIRECTION.dot(info.normal), 0.0f) + kdao;
       } else {
-        return info.sph->rgb * 0.1f;
+        return kdao;
       }
     }
   }
@@ -416,8 +419,7 @@ void ao_test(int sample_point) {
   img.write_ppm("output.ppm");
 }
 
-void raytrace_of_ao_test(int sample_point) {
-  thread_local rng rng(1);
+void raytrace_with_ao_test(int sample_point) {
   image img(512, 512);
   auto canvas_size = img.get_size();
 
@@ -439,6 +441,7 @@ void raytrace_of_ao_test(int sample_point) {
 #pragma omp parallel for schedule(dynamic, 1)
   for(int j = 0; j < height; ++j) {
     for(int i = 0; i < width; ++i) {
+      rng rng(i + width * j);
 
       vec3f color;
       for (int k = 0; k < sample_point; ++k)
@@ -447,7 +450,7 @@ void raytrace_of_ao_test(int sample_point) {
         auto v = (2.0f * (j + rng.makeValue()) - height) / height;
 
         auto ray = camera.pinhole_ray(u, v);
-        color = color + raytrace(ray, scene);
+        color = color + raytrace_with_ao(ray, scene, rng);
       }
 
       color = vec3f(color.get_x() / sample_point, color.get_y() / sample_point, color.get_z() / sample_point);
@@ -472,7 +475,7 @@ void tests() {
 
 int main() {
   
-  ao_test(4);
+  raytrace_with_ao_test(4);
 
   return 0;
 }
